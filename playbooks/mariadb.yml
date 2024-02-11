@@ -1,42 +1,17 @@
-- name: MariaDB installation
-  hosts: mariadbs
-  become: yes
-  tasks:
-    - name: enable and start firewalld service
-      systemd:
-        name: firewalld
-        state: started
-        enabled: yes
-    - name: permit traffic in default zone on port 22/tcp
-      ansible.posix.firewalld:
-        port: 22/tcp
-        permanent: yes
-        state: enabled
-        immediate: yes
-    - name: permit traffic in default zone on port 3306/tcp
-      ansible.posix.firewalld:
-        port: 3306/tcp
-        permanent: yes
-        state: enabled
-        immediate: yes
-    - name: MariaDB yum repository
-      yum_repository:
-        name: MariaDB
-        description: MariaDB
-        baseurl: http://yum.mariadb.org/10.6.2/centos$releasever-amd64
-        enabled: yes
-        gpgcheck: yes
-        gpgkey: https://yum.mariadb.org/RPM-GPG-KEY-MariaDB
-    - name: Install MariaDB server
-      yum:
-        name:
-          - MariaDB-server
-        state: latest
-    - name: start MariaDB service
-      systemd:
-        name: mariadb
-        state: started
-    - name: verify installation
-      ansible.builtin.command: mysql --version
-      register: mysql_version
-    - debug: var=mysql_version.stdout_lines
+---
+- name: update_and_package_installation_ubuntu
+  when: ansible_distribution == "Ubuntu"
+  apt:
+    name: ["tar", "wget", "default-jre"]
+    update_cache: yes
+    state: present
+  ignore_errors: yes
+
+- name: download_tomcat
+  shell: cd /opt/ && wget https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.85/bin/apache-tomcat-9.0.85.tar.gz && tar -xvzf apache-tomcat-9.0.85.tar.gz
+
+- name: changes_in_webapps
+  shell: sed -i 's/8080/8082/g' /opt/apache-tomcat-9.0.85/conf/server.xml && sed -i  '21s/^/<!--/g' "/opt/apache-tomcat-9.0.85/webapps/host-manager/META-INF/context.xml" && sed -i  '22s/$/-->/g' "/opt/apache-tomcat-9.0.85/webapps/host-manager/META-INF/context.xml" && sed -i  '21s/^/<!--/g' "/opt/apache-tomcat-9.0.85/webapps/manager/META-INF/context.xml" && sed -i  '22s/$/-->/g' "/opt/apache-tomcat-9.0.85/webapps/manager/META-INF/context.xml" && sed -i -e '55 a\<role rolename="manager-gui" /> \n<user username="shashi" password="Welcome1" roles="manager-gui" /> \n<!-- user admin can access manager and admin section both --> \n<role rolename="admin-gui" /> \n<user username="shashi" password="Welcome1" roles="manager-gui, admin-gui" />' "/opt/apache-tomcat-9.0.85/conf/tomcat-users.xml"
+- name: shutdown_start
+  become: true
+  shell: cd /opt/apache-tomcat-9.0.85/bin/ && ./shutdown.sh && sleep 5 && ./startup.sh
